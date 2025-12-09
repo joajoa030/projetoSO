@@ -122,7 +122,7 @@ int parser(char* filename, board_t* game_board, int accumulated_points) {
                         game_board->board[line_count * game_board->width + j].has_dot = 1;
                         game_board->board[line_count * game_board->width + j].has_portal = 0;
                     }
-                    else if((line[j] == '@')&& game_board->board[line_count * game_board->width + j].content != 'P' && (game_board->board[line_count * game_board->width + j].content == 'M'&& game_board->board[line_count * game_board->width + j].has_portal == 0)){
+                    else if((line[j] == '@')&& game_board->board[line_count * game_board->width + j].content != 'P' && (((game_board->board[line_count * game_board->width + j].content == 'M'&& game_board->board[line_count * game_board->width + j].has_portal == 0))|| game_board->board[line_count * game_board->width + j].content != 'M')){
                         game_board->board[line_count * game_board->width + j].content = ' ';
                         game_board->board[line_count * game_board->width + j].has_portal = 1;
                         game_board->board[line_count * game_board->width + j].has_dot = 0;
