@@ -107,7 +107,7 @@ int parser(char* filename, board_t* game_board, int accumulated_points) {
                 game_board->ghosts = realloc(game_board->ghosts, game_board->n_ghosts * sizeof(ghost_t));
                 
                 parserPACMON(monster_token, game_board, ispacman, accumulated_points);
-                monster_token = strtok_r(NULL, "\r", &saveptr2);
+                monster_token = strtok_r(NULL, " \r\n\t", &saveptr2);
             }
         }
         
@@ -153,6 +153,7 @@ int parser(char* filename, board_t* game_board, int accumulated_points) {
 
 
 int parserPACMON(char* filename, board_t* board, int ispacman, int accumulated_points) {
+    debug("PARSER PACMON FILENAME: %s\n", filename);
     char temp[256]; // Buffer temporário para evitar sobrescrever o original
     sprintf(temp, "./lvl/%s", filename);
     char realfilename[MAX_FILENAME+5];
