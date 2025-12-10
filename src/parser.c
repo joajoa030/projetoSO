@@ -7,7 +7,24 @@
 #define STRIDE 128
 
 int parser(char* filename, board_t* game_board, int accumulated_points) {
-    sprintf(game_board->level_name, "%s", filename);
+    char clean_name[MAX_FILENAME];
+
+    // Remove prefixo "lvl/"
+    const char *name_no_folder = filename;
+    if (strncmp(filename, "lvl/", 4) == 0) {
+        name_no_folder = filename + 4;
+    }
+
+    // Copia para uma variável temporária
+    strcpy(clean_name, name_no_folder);
+
+    // Remove sufixo ".lvl"
+    char *dot = strrchr(clean_name, '.');
+    if (dot != NULL) {
+        *dot = '\0';  // corta string aqui
+    }
+    sprintf(game_board->level_name, "%s", clean_name);
+    debug("PARSER FILENAME: %s\n", clean_name);
     int fd = open(filename, O_RDONLY);
     if (fd < 0) {
         perror("open error");

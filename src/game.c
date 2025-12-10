@@ -13,6 +13,7 @@
 #define QUIT_GAME 2
 #define LOAD_BACKUP 3
 #define CREATE_BACKUP 4
+
 void screen_refresh(board_t * game_board, int mode) {
     debug("REFRESH\n");
     draw_board(game_board, mode);
@@ -48,6 +49,7 @@ int play_board(board_t * game_board) {
     if (play->command == 'G') {
         
         game_board->backup_exists ++;
+        debug("BACKUP REQUESTED %d\n", game_board->backup_exists);
         if(game_board->backup_exists==1){
             debug("play_board CREATE BACKUP\n");
             return CREATE_BACKUP;
@@ -69,6 +71,7 @@ int play_board(board_t * game_board) {
         else{
             debug("LOAD BACKUP\n");
             result = LOAD_BACKUP;
+            game_board->backup_exists=0;
         }
     }
     
@@ -85,7 +88,11 @@ int play_board(board_t * game_board) {
 
     return CONTINUE_PLAY;  
 }
-
+void child_win(board_t *game_board) {
+    screen_refresh(game_board, DRAW_WIN);
+    sleep_ms(game_board->tempo);
+    kill(getppid(), SIGTERM);
+}
 int main(int argc, char** argv) {
     DIR *directory;
     struct dirent *entry;
@@ -133,10 +140,13 @@ int main(int argc, char** argv) {
     open_debug_file("debug.log");
 
     terminal_init();
+    int current_level=1;
+    int win=0;
     int child=0;
     int accumulated_points = 0;
     bool end_game = false;
     board_t game_board;
+    pid_t pid = -1;
     game_board.backup_exists =0;
   
         for(int i = 0; i < n && !end_game; i++){
@@ -152,16 +162,44 @@ int main(int argc, char** argv) {
                 int result = play_board(&game_board); 
 
                 if(result == NEXT_LEVEL) {
-                    screen_refresh(&game_board, DRAW_WIN);
-                    sleep_ms(game_board.tempo);
-                    break;
+                    current_level++;
+                    debug("NEXT LEVEL %d\n", current_level);
+                    if(current_level==n+1){
+                        win=1;
+                        end_game=true;
+                        if(child==1){
+                            debug("CHILD WIN\n");
+                            child_win(&game_board);
+                        }
+                        break;
+                    }
+                    else{
+                        screen_refresh(&game_board, DRAW_WIN);
+                        sleep_ms(game_board.tempo);
+                        break;
+
+                    }
+                    
+                    
+                    
                 }
 
                 if(result == QUIT_GAME) {
                     if (backup_exists) {
+                        
                         screen_refresh(&game_board, DRAW_MENU);
                         if(child==1){
-                            exit(0);
+                            if(win==1){
+                                debug("CHILD WIN\n");
+                                screen_refresh(&game_board, DRAW_WIN);
+                                sleep_ms(game_board.tempo);
+                            }
+                            else{
+                                debug("CHILD QUIT\n");
+                                child=0;
+                                exit(0);
+                            }
+                            
                         }
                         else{
                             screen_refresh(&game_board, DRAW_GAME_OVER); 
@@ -183,7 +221,7 @@ int main(int argc, char** argv) {
                     if(game_board.backup_exists == 1){
                         debug("main CREATE BACKUP\n");
                         backup_exists = 1;
-                        pid_t pid = fork();
+                        pid = fork();
                         if (pid == 0) {
                             child=1;
                             // FILHO → cria o backup e sai
@@ -192,8 +230,10 @@ int main(int argc, char** argv) {
 
                             // PAI → continua o jogo
                             backup_exists = 1;
-                            
                             wait(0);
+
+                            backup_exists = 0;
+                            game_board.backup_exists = 0;
                             screen_refresh(&game_board, DRAW_MENU);
                             continue;
                         }
@@ -207,8 +247,8 @@ int main(int argc, char** argv) {
                     } 
                     else {
                     return QUIT_GAME;
-                }
-}
+                    }
+            }
                 screen_refresh(&game_board, DRAW_MENU); 
 
                 accumulated_points = game_board.pacmans[0].points;      
@@ -216,11 +256,10 @@ int main(int argc, char** argv) {
             print_board(&game_board);
             unload_level(&game_board);
         }       
-    
-
     terminal_cleanup();
 
-    close_debug_file();
-
-    return 0;
+    close_debug_file();    
+    return 0;    
+    
+    
 }
