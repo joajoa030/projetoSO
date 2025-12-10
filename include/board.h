@@ -57,6 +57,7 @@ typedef struct {
     char pacman_file[256];  // file with pacman movements
     char ghosts_files[MAX_GHOSTS][256]; // files with monster movements
     int tempo;              // Duration of each play
+    int backup_exists;       // Flag to indicate if a backup exists
 } board_t;
 
 /*Makes the current thread sleep for 'int milliseconds' miliseconds*/

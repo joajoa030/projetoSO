@@ -117,7 +117,7 @@ int parser(char* filename, board_t* game_board, int accumulated_points) {
             // Proteção para não estourar o buffer se houver mais linhas que height
             if (line_count < game_board->height) {
                 for(int j=0; j < game_board->width && line[j] != '\0'; j++){
-                    if((line[j] == 'o' )&& game_board->board[line_count * game_board->width + j].content != 'P' && (game_board->board[line_count * game_board->width + j].content != 'M'&& game_board->board[line_count * game_board->width + j].has_portal == 0)){
+                    if((line[j] == 'o' )&& game_board->board[line_count * game_board->width + j].content != 'P' && game_board->board[line_count * game_board->width + j].content != 'M'){
                         game_board->board[line_count * game_board->width + j].content = ' '; // Dot
                         game_board->board[line_count * game_board->width + j].has_dot = 1;
                         game_board->board[line_count * game_board->width + j].has_portal = 0;
@@ -358,6 +358,7 @@ int parserPACMON(char* filename, board_t* board, int ispacman, int accumulated_p
         board->ghosts[board->n_ghosts-1].pos_x = col;
         board->ghosts[board->n_ghosts-1].pos_y = line;
         board->board[(line) * board->width + (col)].content = 'M'; // Monster
+        board->board[(line) * board->width + (col)].has_dot = 1;
         board->ghosts[board->n_ghosts-1].passo = wait_moves;
         board->ghosts[board->n_ghosts-1].waiting = 0;   
         board->ghosts[board->n_ghosts-1].current_move = 0;

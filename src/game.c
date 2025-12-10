@@ -6,12 +6,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <signal.h>
+#include <sys/wait.h>
 #define CONTINUE_PLAY 0
 #define NEXT_LEVEL 1
 #define QUIT_GAME 2
 #define LOAD_BACKUP 3
 #define CREATE_BACKUP 4
-
 void screen_refresh(board_t * game_board, int mode) {
     debug("REFRESH\n");
     draw_board(game_board, mode);
@@ -44,7 +45,15 @@ int play_board(board_t * game_board) {
     if (play->command == 'Q') {
         return QUIT_GAME;
     }
-
+    if (play->command == 'G') {
+        
+        game_board->backup_exists ++;
+        if(game_board->backup_exists==1){
+            debug("play_board CREATE BACKUP\n");
+            return CREATE_BACKUP;
+        }  
+        return CONTINUE_PLAY; 
+    }
     int result = move_pacman(game_board, 0, play);
     if (result == REACHED_PORTAL) {
         // Next level
@@ -52,7 +61,15 @@ int play_board(board_t * game_board) {
     }
 
     if(result == DEAD_PACMAN) {
-        return QUIT_GAME;
+        if(game_board->backup_exists != 1){
+            debug("toiros\n");
+            return QUIT_GAME;
+            
+        }
+        else{
+            debug("LOAD BACKUP\n");
+            result = LOAD_BACKUP;
+        }
     }
     
     for (int i = 0; i < game_board->n_ghosts; i++) {
@@ -73,6 +90,7 @@ int main(int argc, char** argv) {
     DIR *directory;
     struct dirent *entry;
     int n=0;
+    int backup_exists=0;
     char **list_lvl = NULL;
     directory = opendir("lvl");
     if(directory == NULL){
@@ -115,11 +133,11 @@ int main(int argc, char** argv) {
     open_debug_file("debug.log");
 
     terminal_init();
-    
+    int child=0;
     int accumulated_points = 0;
     bool end_game = false;
     board_t game_board;
-    
+    game_board.backup_exists =0;
   
         for(int i = 0; i < n && !end_game; i++){
             
@@ -140,12 +158,57 @@ int main(int argc, char** argv) {
                 }
 
                 if(result == QUIT_GAME) {
-                    screen_refresh(&game_board, DRAW_GAME_OVER); 
-                    sleep_ms(game_board.tempo);
-                    end_game = true;
-                    break;
+                    if (backup_exists) {
+                        screen_refresh(&game_board, DRAW_MENU);
+                        if(child==1){
+                            exit(0);
+                        }
+                        else{
+                            screen_refresh(&game_board, DRAW_GAME_OVER); 
+                            sleep_ms(game_board.tempo);
+                            end_game = true;
+                            break;
+                        }
+                        
+                    }
+                    else {
+                        screen_refresh(&game_board, DRAW_GAME_OVER); 
+                        sleep_ms(game_board.tempo);
+                        end_game = true;
+                        break;
+                    }
                 }
-        
+                
+                if (result == CREATE_BACKUP) {
+                    if(game_board.backup_exists == 1){
+                        debug("main CREATE BACKUP\n");
+                        backup_exists = 1;
+                        pid_t pid = fork();
+                        if (pid == 0) {
+                            child=1;
+                            // FILHO → cria o backup e sai
+                            screen_refresh(&game_board, DRAW_MENU);
+                        } else if (pid > 0) {
+
+                            // PAI → continua o jogo
+                            backup_exists = 1;
+                            
+                            wait(0);
+                            screen_refresh(&game_board, DRAW_MENU);
+                            continue;
+                        }
+                    }
+                }
+
+                if (result == LOAD_BACKUP) {
+                    if (backup_exists) {
+                        screen_refresh(&game_board, DRAW_MENU);
+                        continue;
+                    } 
+                    else {
+                    return QUIT_GAME;
+                }
+}
                 screen_refresh(&game_board, DRAW_MENU); 
 
                 accumulated_points = game_board.pacmans[0].points;      
