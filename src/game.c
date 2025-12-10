@@ -13,7 +13,7 @@
 #define QUIT_GAME 2
 #define LOAD_BACKUP 3
 #define CREATE_BACKUP 4
-
+int quit = 0; 
 void screen_refresh(board_t * game_board, int mode) {
     debug("REFRESH\n");
     draw_board(game_board, mode);
@@ -44,6 +44,7 @@ int play_board(board_t * game_board) {
     debug("KEY %c\n", play->command);
 
     if (play->command == 'Q') {
+        quit = 1; 
         return QUIT_GAME;
     }
     if (play->command == 'G') {
@@ -195,9 +196,18 @@ int main(int argc, char** argv) {
                                 sleep_ms(game_board.tempo);
                             }
                             else{
+                                if(quit==1){
+                                    screen_refresh(&game_board, DRAW_GAME_OVER); 
+                                    sleep_ms(game_board.tempo);
+                                    end_game = true;
+                                    kill(getppid(), SIGTERM);
+                                    exit(0);
+
+                                }
                                 debug("CHILD QUIT\n");
                                 child=0;
                                 exit(0);
+                                
                             }
                             
                         }
@@ -205,6 +215,7 @@ int main(int argc, char** argv) {
                             screen_refresh(&game_board, DRAW_GAME_OVER); 
                             sleep_ms(game_board.tempo);
                             end_game = true;
+                            
                             break;
                         }
                         
