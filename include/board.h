@@ -6,6 +6,7 @@
 #define MAX_FILENAME 256
 #define MAX_GHOSTS 25
 
+
 typedef enum {
     REACHED_PORTAL = 1,
     VALID_MOVE = 0,
