@@ -23,8 +23,9 @@ void *thread_ghost(void *arg);   // <--- AQUI
 
 pthread_mutex_t board_mutex;
 
-
+int quit_play = 0;
 int quit = 0;
+
 void screen_refresh(board_t * game_board, int mode) {
     pthread_mutex_lock(&board_mutex);
     debug("REFRESH\n");
@@ -89,8 +90,8 @@ int play_board(board_t * game_board) {
     }
     command_t* play;
     command_t c; 
-    if (pacman->n_moves == 0 ) { // if is user input
-        
+    if (pacman->n_moves == 0) { // if is user input
+        debug("gui\n");
         c.command = get_input();
 
         if(c.command == '\0')
@@ -102,13 +103,16 @@ int play_board(board_t * game_board) {
     else { // else if the moves are pre-defined in the file
         // avoid buffer overflow wrapping around with modulo of n_moves
         // this ensures that we always access a valid move for the pacman
+        debug("piu\n");
         play = &pacman->moves[pacman->current_move%pacman->n_moves];
+        
     }
 
     debug("KEY %c\n", play->command);
 
     if (play->command == 'Q') {
-        quit = 1; 
+        quit_play = 1;
+        quit=1; 
         return QUIT_GAME;
     }
     if (play->command == 'G') {
@@ -161,7 +165,7 @@ int main(int argc, char** argv) {
     int n=0;
     int backup_exists=0;
     char **list_lvl = NULL;
-    directory = opendir("lvl");
+    directory = opendir(argv[1]);
     if(directory == NULL){
         printf("ERROR DIRECTORY\n");
         return 1;
@@ -219,14 +223,22 @@ int main(int argc, char** argv) {
 
             parser(path, &game_board, accumulated_points);
             
-            pthread_t ghost_threads[game_board.n_ghosts];
+            pthread_t *ghost_threads = malloc(sizeof(pthread_t) * game_board.n_ghosts);
 
-            for (int i = 0; i < game_board.n_ghosts; i++) {
-                ghost_arg_t *garg = malloc(sizeof(ghost_arg_t));
-                garg->board = &game_board;
-                garg->ghost_index = i;
-                pthread_create(&ghost_threads[i], NULL, thread_ghost, garg);
+            for (int g = 0; g < game_board.n_ghosts; ++g) {
+            ghost_arg_t *garg = malloc(sizeof(ghost_arg_t));
+            if (!garg) {
+                perror("malloc garg");
+                // se falhar, podes decidir continuar sem esse fantasma
+                continue;
             }
+            garg->board = &game_board;
+            garg->ghost_index = g;
+            if (pthread_create(&ghost_threads[g], NULL, thread_ghost, garg) != 0) {
+                debug("erro pthread_create ghost %d\n", g);
+                free(garg);
+            }
+}
             pthread_mutex_lock(&board_mutex);
             draw_board(&game_board, DRAW_MENU);
             refresh_screen();
@@ -234,23 +246,21 @@ int main(int argc, char** argv) {
             sleep_ms(game_board.tempo);//primeira jogada
             
             while(true) {
-                pthread_mutex_lock(&board_mutex);
-                int pacman_alive = game_board.pacmans[0].alive;
-                pthread_mutex_unlock(&board_mutex);
                 
-                if (!pacman_alive) {
-                    quit=1;
-                    screen_refresh(&game_board, DRAW_GAME_OVER); 
-                    end_game = true; 
-                    break;
-
-                }
                 
                 int result = play_board(&game_board); 
 
                 if(result == NEXT_LEVEL) {
                     current_level++;
                     debug("NEXT LEVEL %d\n", current_level);
+                    for (int t = 0; t < game_board.n_ghosts; t++) {
+                        pthread_cancel(ghost_threads[t]);
+                    }
+
+                    // 2) ESPERAR ELAS TERMINAREM
+                    for (int t = 0; t < game_board.n_ghosts; t++) {
+                        pthread_join(ghost_threads[t], NULL);
+                    }
                     
                     if(current_level==n+1){
                         win=1;
@@ -277,44 +287,115 @@ int main(int argc, char** argv) {
 
                 if(result == QUIT_GAME) {
                     
-                    if (backup_exists) {
-                        
+                    // Se existe um backup activo, usamos a lógica específica
+                    if (game_board.backup_exists || backup_exists) {
+                        // mostra menu e decide comportamento consoante se é filho
                         screen_refresh(&game_board, DRAW_MENU);
-                        if(child==1){
-                            
-                            if(win==1){
+
+                        if (child == 1) {
+                            // No filho: se ganhou, mostra WIN, senão se foi Q sai, caso contrário apenas sai
+                            if (win == 1) {
                                 debug("CHILD WIN\n");
                                 screen_refresh(&game_board, DRAW_WIN);
-                            }
-                            
-                            else{
-                                
-                                if(quit==1){
-                                    screen_refresh(&game_board, DRAW_GAME_OVER); 
-                                    end_game = true;
-                                    kill(getppid(), SIGTERM);
+                            } else {
+                                if (quit_play == 1) {
+                                    // jogador pressionou Q no filho -> mostrar game over e sair
+                                    screen_refresh(&game_board, DRAW_GAME_OVER);
+                                    // limpa threads do filho e termina processo do filho
+                                    quit = 1;
+                                    if (ghost_threads) {
+                                        for (int t = 0; t < game_board.n_ghosts; t++)
+                                            pthread_cancel(ghost_threads[t]);
+                                        for (int t = 0; t < game_board.n_ghosts; t++)
+                                            pthread_join(ghost_threads[t], NULL);
+                                        free(ghost_threads);
+                                        ghost_threads = NULL;
+                                    }
                                     exit(0);
-
                                 }
-
                                 debug("CHILD QUIT\n");
-                                child=0;
+                                // se chegou aqui, sai também
+                                if (ghost_threads) {
+                                    for (int t = 0; t < game_board.n_ghosts; t++)
+                                        pthread_cancel(ghost_threads[t]);
+                                    for (int t = 0; t < game_board.n_ghosts; t++)
+                                        pthread_join(ghost_threads[t], NULL);
+                                    free(ghost_threads);
+                                    ghost_threads = NULL;
+                                }
                                 exit(0);
-                                
                             }
-                            
-                        }
-                        
-                        else{
-                            screen_refresh(&game_board, DRAW_GAME_OVER); 
-                            end_game = true; 
+                        } else {
+                            // Pai com backup activo: mostra GAME_OVER e termina o loop
+                            screen_refresh(&game_board, DRAW_GAME_OVER);
+                            end_game = true;
+                            // limpa threads do pai
+                            quit = 1;
+                            if (ghost_threads) {
+                                for (int t = 0; t < game_board.n_ghosts; t++)
+                                    pthread_cancel(ghost_threads[t]);
+                                for (int t = 0; t < game_board.n_ghosts; t++)
+                                    pthread_join(ghost_threads[t], NULL);
+                                free(ghost_threads);
+                                ghost_threads = NULL;
+                            }
                             break;
                         }
-                        
-                    }
-                    
-                    else{
-                        screen_refresh(&game_board, DRAW_GAME_OVER); 
+                    } else {
+                        // Não há backup activo: comportamento simples e consistente:
+                        // - Se pacman está morto, garante game over
+                        // - Se jogador pressionou Q (quit_play==1), termina imediatamente
+                        pthread_mutex_lock(&board_mutex);
+                        int pacman_alive = game_board.pacmans[0].alive;
+                        pthread_mutex_unlock(&board_mutex);
+
+                        // Se foi o jogador a pedir saída => fechar
+                        if (quit_play == 1) {
+                            debug("PLAYER REQUESTED QUIT\n");
+                            // mostrar game over, limpar threads e sair
+                            screen_refresh(&game_board, DRAW_GAME_OVER);
+                            quit = 1;
+                            if (ghost_threads) {
+                                for (int t = 0; t < game_board.n_ghosts; t++)
+                                    pthread_cancel(ghost_threads[t]);
+                                for (int t = 0; t < game_board.n_ghosts; t++)
+                                    pthread_join(ghost_threads[t], NULL);
+                                free(ghost_threads);
+                                ghost_threads = NULL;
+                            }
+                            end_game = true;
+                            break;
+                        }
+
+                        // Caso pacman esteja morto — game over também
+                        if (!pacman_alive) {
+                            debug("PACMAN DEAD -> GAME OVER\n");
+                            quit = 1;
+                            if (ghost_threads) {
+                                for (int t = 0; t < game_board.n_ghosts; t++)
+                                    pthread_cancel(ghost_threads[t]);
+                                for (int t = 0; t < game_board.n_ghosts; t++)
+                                    pthread_join(ghost_threads[t], NULL);
+                                free(ghost_threads);
+                                ghost_threads = NULL;
+                            }
+                            screen_refresh(&game_board, DRAW_GAME_OVER);
+                            end_game = true;
+                            break;
+                        }
+
+                        // Safety fallback: se chegámos aqui sem condição clara, fechamos de qualquer forma.
+                        debug("QUIT_GAME sem backup e pacman vivo -> encerrar por segurança\n");
+                        quit = 1;
+                        if (ghost_threads) {
+                            for (int t = 0; t < game_board.n_ghosts; t++)
+                                pthread_cancel(ghost_threads[t]);
+                            for (int t = 0; t < game_board.n_ghosts; t++)
+                                pthread_join(ghost_threads[t], NULL);
+                            free(ghost_threads);
+                            ghost_threads = NULL;
+                        }
+                        screen_refresh(&game_board, DRAW_GAME_OVER);
                         end_game = true;
                         break;
                     }
@@ -325,22 +406,55 @@ int main(int argc, char** argv) {
                     if(game_board.backup_exists == 1){
                         debug("main CREATE BACKUP\n");
                         backup_exists = 1;
+
+                        // --- novas linhas ---
+                        quit = 1;  // parar as threads
+                        for (int t = 0; t < game_board.n_ghosts; t++)
+                            pthread_cancel(ghost_threads[t]);
+
+                        for (int t = 0; t < game_board.n_ghosts; t++)
+                            pthread_join(ghost_threads[t], NULL);
+
+                        free(ghost_threads);
+                        ghost_threads = NULL;
+                        // ---------------------
+
                         pid = fork();
                         
-                        if (pid == 0) {
+                        if (pid == 0) {   // FILHO
                             child=1;
-                            // FILHO → cria o backup e sai
-                            screen_refresh(&game_board, DRAW_MENU);
-                        } 
-                        
-                        else if (pid > 0) {
-                            // PAI → continua o jogo
+                            quit = 0;
+                            quit_play = 0;
                             backup_exists = 1;
-                            wait(0);
-                            backup_exists = 0;
-                            game_board.backup_exists = 0;
-                            screen_refresh(&game_board, DRAW_MENU);
+                            game_board.backup_exists = 1;
+                            terminal_init();
+                            // NOVO ARRAY de threads (não herdar o do pai)
+                            ghost_threads = malloc(sizeof(pthread_t) * game_board.n_ghosts);
+
+                            for (int g = 0; g < game_board.n_ghosts; ++g) {
+                                ghost_arg_t *garg = malloc(sizeof(ghost_arg_t));
+                                garg->board = &game_board;
+                                garg->ghost_index = g;
+
+                                if (pthread_create(&ghost_threads[g], NULL, thread_ghost, garg) != 0) {
+                                    debug("FILHO: erro pthread_create ghost %d\n", g);
+                                    free(garg);
+                                }
+                            }
+
                             continue;
+                        }
+                        
+                        else if (pid > 0) {   // PAI = processo de backup
+                            quit = 1;
+                            backup_exists = 1;
+
+                            // O pai NÃO PODE mexer no terminal
+                            terminal_cleanup();
+
+                            // Fica parado à espera do filho
+                            int status;
+                            waitpid(pid, &status, 0);
                         }
                     }
                 }
@@ -362,12 +476,18 @@ int main(int argc, char** argv) {
             }
             
             print_board(&game_board);
-            
-            for (int i = 0; i < game_board.n_ghosts; i++) {
-                pthread_cancel(ghost_threads[i]);
+            if (ghost_threads) {
+                for (int i = 0; i < game_board.n_ghosts; ++i) {
+                    pthread_cancel(ghost_threads[i]);
+                }
+                for (int i = 0; i < game_board.n_ghosts; ++i) {
+                    pthread_join(ghost_threads[i], NULL);
+                }
+                free(ghost_threads);
+                ghost_threads = NULL;
             }
-            
             unload_level(&game_board);
+            
         }       
     terminal_cleanup();
     pthread_mutex_destroy(&board_mutex);    

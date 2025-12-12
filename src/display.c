@@ -22,8 +22,9 @@ int terminal_init() {
 
     // Hide the cursor
     curs_set(0);
-
-    // Enable color if terminal supports it
+    // Set getch to non-blocking se nao houvesse isto tinhamos de clicar numa letra para haver game over nas threads
+    timeout(50);  
+    // Enable color if terminal supports itdw
     if (has_colors()) {
         start_color();
 
