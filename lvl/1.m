@@ -12,6 +12,8 @@ POS 7 7
 # R (direcção aleatória), T (espera um número de jogadas), C (carregar)
 A
 D
-W
-S
-
+A
+A
+D
+T 2
+C

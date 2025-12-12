@@ -18,7 +18,7 @@
 
 typedef struct {
     board_t *board;
-    int ghost_index;
+    int ghost_index;     
 } ghost_arg_t;
 
 void *thread_ghost(void *arg); // <--- AQUI
@@ -41,18 +41,21 @@ void *thread_ghost(void *arg) {
     board_t *board = garg->board;
     int id = garg->ghost_index;
     free(garg);
-
+    
     while (!quit) {
         pthread_mutex_lock(&board_mutex);
         if (!board->pacmans[0].alive) {
             pthread_mutex_unlock(&board_mutex);
             break;
         }
+        
         ghost_t *g = &board->ghosts[id];
+        
         if (id < board->n_ghosts && g->n_moves > 0) {
             command_t *cmd = &g->moves[g->current_move % g->n_moves];
+            debug("Ghost %d cmd = %c\n", id, cmd->command);
             move_ghost(board, id, cmd);
-            g->current_move = (g->current_move + 1) % g->n_moves;
+            g->current_move = (g->current_move ) % g->n_moves;
         }
         pthread_mutex_unlock(&board_mutex);
         screen_refresh(board, DRAW_MENU);
@@ -226,7 +229,7 @@ int main(int argc, char** argv) {
         while(true) {
 
             int result = play_board(&game_board);
-
+            sleep_ms(game_board.tempo);
             if(result == NEXT_LEVEL) {
                 current_level++;
                 debug("NEXT LEVEL %d\n", current_level);
@@ -324,8 +327,8 @@ int main(int argc, char** argv) {
                 ghost_threads = NULL;
 
                 // Pai limpa o terminal antes do fork para ceder controlo ao filho
+                
                 terminal_cleanup();
-
                 pid = fork();
                 if (pid < 0) {
                     perror("fork");
@@ -343,7 +346,8 @@ int main(int argc, char** argv) {
 
                     // Filhos re-inicializam o terminal e recriam threads
                     terminal_init();
-
+                    draw_board(&game_board, DRAW_MENU);
+                    refresh_screen();
                     ghost_threads = malloc(sizeof(pthread_t) * (game_board.n_ghosts > 0 ? game_board.n_ghosts : 1));
                     if (ghost_threads) {
                         for (int g = 0; g < game_board.n_ghosts; ++g) {
@@ -369,6 +373,8 @@ int main(int argc, char** argv) {
                     // Filho terminou; pai recupera terminal e estado
                     debug("PAI: filho terminou, restaurando terminal\n");
                     terminal_init();
+                    draw_board(&game_board, DRAW_MENU);
+                    refresh_screen();
 
                     // Reset backup flag no pai (não há clone activo agora)
                     pthread_mutex_lock(&board_mutex);

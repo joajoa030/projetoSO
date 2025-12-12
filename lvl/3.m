@@ -11,8 +11,6 @@ POS 9 9
 # Os comandos possíveis são A (esq.), D (dir.), W (cima.), S (baixo)
 # R (direcção aleatória), T (espera um número de jogadas), C (carregar)
 A
-R
 D
 W
 S
-W
