@@ -81,6 +81,11 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
             }
             else command->turns_left -= 1;
             return VALID_MOVE;
+        case 'G':
+            return VALID_MOVE;
+        case 'Q':
+            pac->current_move += 1; 
+            return VALID_MOVE;
         default:
             return INVALID_MOVE; // Invalid direction
     }

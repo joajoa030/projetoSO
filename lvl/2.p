@@ -6,14 +6,18 @@ PASSO 0
 # Assume-se que não é possível o monstro ser colocado
 # numa posição impossível/inexistente.
 # Só existe um no início por ficheiro.
-POS 10 9
+POS 1 1
 # Todos os comandos após PASSO e POS são executados em ciclo infinito.
 # Os comandos possíveis são A (esq.), D (dir.), W (cima.), S (baixo)
 # R (direcção aleatória), T (espera um número de jogadas), C (carregar)
-W
-T 5
+D
 S
-W
-W
+D
 S
+D
 S
+D
+S
+D
+D
+G

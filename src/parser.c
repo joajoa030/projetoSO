@@ -356,6 +356,26 @@ int parserPACMON(char* filename, board_t* board, int ispacman, int accumulated_p
             nmovesmonster++;
             token = strtok(NULL, "\n");
         }
+        else if(token[0] == 'G'){
+        
+            if(ispacman){
+                 
+                board->pacmans[0].moves[nmoves].command = 'G';
+                board->pacmans[0].moves[nmoves].turns = 1;
+                nmoves++;
+            }
+            token = strtok(NULL, "\n");
+        }
+        else if(token[0] == 'Q'){
+        
+            if(ispacman){
+                 
+                board->pacmans[0].moves[nmoves].command = 'Q';
+                board->pacmans[0].moves[nmoves].turns = 1;
+                nmoves++;
+            }
+            token = strtok(NULL, "\n");
+        }
         
     }
     if(ispacman){

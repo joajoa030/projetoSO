@@ -21,7 +21,7 @@ typedef struct {
     int ghost_index;     
 } ghost_arg_t;
 
-void *thread_ghost(void *arg); // <--- AQUI
+void *thread_ghost(void *arg);
 
 pthread_mutex_t board_mutex;
 int quit_play = 0;
@@ -29,7 +29,6 @@ int quit = 0;
 
 void screen_refresh(board_t * game_board, int mode) {
     pthread_mutex_lock(&board_mutex);
-    debug("REFRESH\n");
     draw_board(game_board, mode);
     refresh_screen();
     pthread_mutex_unlock(&board_mutex);
@@ -53,7 +52,6 @@ void *thread_ghost(void *arg) {
         
         if (id < board->n_ghosts && g->n_moves > 0) {
             command_t *cmd = &g->moves[g->current_move % g->n_moves];
-            debug("Ghost %d cmd = %c\n", id, cmd->command);
             move_ghost(board, id, cmd);
             g->current_move = (g->current_move ) % g->n_moves;
         }
@@ -74,10 +72,8 @@ int play_board(board_t * game_board) {
 
     if (!pacman_alive) {
         if (backup_flag == 1) {
-            debug("play_board: pacman morto → LOAD_BACKUP\n");
             return LOAD_BACKUP;
         } else {
-            debug("play_board: pacman morto → QUIT_GAME\n");
             return QUIT_GAME;
         }
     }
@@ -86,17 +82,14 @@ int play_board(board_t * game_board) {
     command_t c;
 
     if (pacman->n_moves == 0) { // if is user input
-        debug("gui\n");
         c.command = get_input();
         if(c.command == '\0') return CONTINUE_PLAY;
         c.turns = 1;
         play = &c;
     } else {
-        debug("piu\n");
         play = &pacman->moves[pacman->current_move%pacman->n_moves];
     }
 
-    debug("KEY %c\n", play->command);
 
     if (play->command == 'Q') {
         quit_play = 1;
@@ -105,10 +98,13 @@ int play_board(board_t * game_board) {
     }
 
     if (play->command == 'G') {
+        if (pacman->n_moves > 0) {
+            pthread_mutex_lock(&board_mutex);
+            pacman->current_move++;
+            pthread_mutex_unlock(&board_mutex);
+        }
         game_board->backup_exists ++;
-        debug("BACKUP REQUESTED %d\n", game_board->backup_exists);
         if(game_board->backup_exists==1){
-            debug("play_board CREATE BACKUP\n");
             return CREATE_BACKUP;
         }
         return CONTINUE_PLAY;
@@ -124,11 +120,9 @@ int play_board(board_t * game_board) {
 
     if(result == DEAD_PACMAN) {
         if(game_board->backup_exists != 1){
-            debug("toiros\n");
             return QUIT_GAME;
         }
         else{
-            debug("LOAD BACKUP\n");
             result = LOAD_BACKUP;
             game_board->backup_exists=0;
         }
@@ -201,7 +195,7 @@ int main(int argc, char** argv) {
         snprintf(path, sizeof(path), "lvl/%s", list_lvl[i]);
 
         parser(path, &game_board, accumulated_points);
-
+        quit = 0; 
         pthread_t *ghost_threads = malloc(sizeof(pthread_t) * game_board.n_ghosts);
         for (int g = 0; g < game_board.n_ghosts; ++g) {
             ghost_arg_t *garg = malloc(sizeof(ghost_arg_t));
@@ -213,7 +207,6 @@ int main(int argc, char** argv) {
             garg->ghost_index = g;
 
             if (pthread_create(&ghost_threads[g], NULL, thread_ghost, garg) != 0) {
-                debug("erro pthread_create ghost %d\n", g);
                 free(garg);
             }
         }
@@ -232,20 +225,13 @@ int main(int argc, char** argv) {
             sleep_ms(game_board.tempo);
             if(result == NEXT_LEVEL) {
                 current_level++;
-                debug("NEXT LEVEL %d\n", current_level);
+                quit = 1;    
 
-                for (int t = 0; t < game_board.n_ghosts; t++) {
-                    pthread_cancel(ghost_threads[t]);
-                }
-                for (int t = 0; t < game_board.n_ghosts; t++) {
-                    pthread_join(ghost_threads[t], NULL);
-                }
 
                 if(current_level==n+1){
                     win=1;
                     end_game=true;
                     if(child==1){
-                        debug("CHILD WIN\n");
                         child_win(&game_board);
                     }
                     else{
@@ -266,7 +252,6 @@ int main(int argc, char** argv) {
 
                     if(child==1){
                         if(win==1){
-                            debug("CHILD WIN\n");
                             screen_refresh(&game_board, DRAW_WIN);
                         }
                         else{
@@ -300,7 +285,6 @@ int main(int argc, char** argv) {
                 pthread_mutex_unlock(&board_mutex);
 
                 if (!pacman_alive) {
-                    debug("madeira e cameirao\n");
                     quit=1;
                     screen_refresh(&game_board, DRAW_GAME_OVER);
                     end_game = true;
@@ -314,12 +298,8 @@ int main(int argc, char** argv) {
                 game_board.backup_exists = 1;
                 pthread_mutex_unlock(&board_mutex);
 
-                debug("main CREATE BACKUP\n");
-
                 // Parar threads do pai
                 quit = 1;
-                for (int t = 0; t < game_board.n_ghosts; t++)
-                    pthread_cancel(ghost_threads[t]);
                 for (int t = 0; t < game_board.n_ghosts; t++)
                     pthread_join(ghost_threads[t], NULL);
 
@@ -359,7 +339,6 @@ int main(int argc, char** argv) {
                             garg->board = &game_board;
                             garg->ghost_index = g;
                             if (pthread_create(&ghost_threads[g], NULL, thread_ghost, garg) != 0) {
-                                debug("FILHO: erro pthread_create ghost %d\n", g);
                                 free(garg);
                             }
                         }
@@ -371,7 +350,6 @@ int main(int argc, char** argv) {
                     waitpid(pid, &status, 0);
 
                     // Filho terminou; pai recupera terminal e estado
-                    debug("PAI: filho terminou, restaurando terminal\n");
                     terminal_init();
                     draw_board(&game_board, DRAW_MENU);
                     refresh_screen();
@@ -394,7 +372,6 @@ int main(int argc, char** argv) {
                             garg->board = &game_board;
                             garg->ghost_index = g;
                             if (pthread_create(&ghost_threads[g], NULL, thread_ghost, garg) != 0) {
-                                debug("PAI: erro pthread_create ghost %d\n", g);
                                 free(garg);
                             }
                         }
@@ -421,9 +398,6 @@ int main(int argc, char** argv) {
 
         print_board(&game_board);
 
-        for (int i = 0; i < game_board.n_ghosts; ++i) {
-            pthread_cancel(ghost_threads[i]);
-        }
         for (int i = 0; i < game_board.n_ghosts; ++i) {
             pthread_join(ghost_threads[i], NULL);
         }

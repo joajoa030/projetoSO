@@ -13,7 +13,8 @@ POS 7 7
 A
 D
 A
+D
+A
+T 4
 A
 D
-T 2
-C
